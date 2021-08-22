@@ -1,0 +1,99 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel Update
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+
+struct Particle {
+    float2 position;
+    float angle;
+
+};
+
+RWStructuredBuffer<Particle> particles;
+RWTexture2D<float4> TrailMap;
+int width;
+int height;
+int count;
+float speed;
+float sensor_offset;
+float sensor_width;
+float sensor_angle;
+float turn;
+
+
+float rand(float2 co) {
+	return(frac(sin(dot(co.xy, float2(12.9898, 78.233))) * 43758.5453)) * 1;
+}
+
+
+
+void move(uint3 id){
+	Particle particle = particles[id.x];
+	float2 dir = float2(cos(particle.angle), sin(particle.angle));
+	float2 new_pos = particle.position + dir * speed;
+
+	if (new_pos.x >= width || new_pos.x < 0 || new_pos.y >= height || new_pos.y < 0) {
+
+		new_pos.x = min(width, max(0, new_pos.x));
+		new_pos.y = min(height, max(0, new_pos.y));
+		particles[id.x].angle = rand(float2(new_pos.x, new_pos.y)) * 2 * 3.141;
+	}
+	particles[id.x].position = new_pos;
+	TrailMap[int2(new_pos.x, new_pos.y)] = float4(255,255,255,255);
+	return;
+}
+
+
+float senser(uint3 id, float angle_offset) {
+	float sense_angle = particles[id.x].angle + angle_offset;
+	float2 sense_dir = float2(cos(sense_angle), sin(sense_angle));
+	float2 center = particles[id.x].position + sense_dir * sensor_offset;
+	float sum = 0;
+
+	for (int x = -sensor_width; x <= sensor_width; x++) {
+		for (int y = -sensor_width; y <= sensor_width; y++) {
+			float2 pos = center + float2(x, y);
+
+			if (pos.x < width && pos.x > 0 && pos.y < height && pos.y > 0)
+				sum += TrailMap[pos.xy];
+		}
+
+	}
+	return sum;
+
+}
+
+
+void sense(uint3 id) {
+	
+	float forward = senser(id, 0.0);
+	float left = senser(id, -sensor_angle);
+	float right = senser(id, sensor_angle);
+
+
+
+	if (forward > left && forward > right)
+		particles[id.x].angle += 0;
+	else if (forward < left && forward < right) {
+		particles[id.x].angle = rand(float2(left, right)) * turn;
+	}
+	else if (left < right) {
+		particles[id.x].angle -= turn;
+	}
+	else if (left > right) {
+		particles[id.x].angle += turn;
+	}
+}
+
+
+
+
+
+[numthreads(1024,1,1)]
+void Update (uint3 id : SV_DispatchThreadID)
+{
+	sense(id);
+	move(id);
+	
+}

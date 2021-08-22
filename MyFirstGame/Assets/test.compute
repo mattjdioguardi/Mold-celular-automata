@@ -1,0 +1,35 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> TrailMap;
+float time;
+int width;
+int height;
+float diffusion;
+float decay;
+
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+     //TODO: insert actual code here!
+
+    if (id.x < 0 || id.x >= width || id.y < 0 || id.y >= height)
+        return;
+
+    float sum = 0;
+
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            sum += TrailMap[int2(id.x + x, id.y + y)];
+        }  
+    }
+    sum /= 9;
+
+    float4 blend = lerp(TrailMap[id.xy], sum, diffusion * time);
+
+
+    TrailMap[id.xy] = blend -decay*time;
+}
